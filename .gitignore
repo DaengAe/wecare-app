@@ -371,7 +371,7 @@ google-services.json
 
 ### ReactNative.Xcode Stack ###
 ## User settings
-xcuserdata/
+xcodeUserdata/
 
 ## Xcode 8 and earlier
 *.xcscmblueprint
@@ -449,3 +449,5 @@ gradle-app.setting
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/react,reactnative,java,intellij,redis,git,visualstudiocode
+
+wecare-frontend/
