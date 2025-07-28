@@ -50,6 +50,7 @@ class AuthIntegrationTest {
         validSignUpRequest = SignUpRequest.builder()
                 .username("testuser123")
                 .password("password123!")
+                .phone("010-1234-5678")
                 .name("테스트유저")
                 .gender(Gender.MALE)
                 .birthDate(LocalDate.of(1990, 1, 1))
@@ -99,6 +100,7 @@ class AuthIntegrationTest {
         SignUpRequest request = SignUpRequest.builder()
                 .username("abc") // 6자 미만
                 .password("password123!")
+                .phone("010-1234-5678")
                 .name("테스트")
                 .gender(Gender.MALE)
                 .birthDate(LocalDate.of(1990, 1, 1))
@@ -123,6 +125,7 @@ class AuthIntegrationTest {
         SignUpRequest request = SignUpRequest.builder()
                 .username("newuser123")
                 .password("short") // 8자 미만
+                .phone("010-1234-5678")
                 .name("테스트")
                 .gender(Gender.MALE)
                 .birthDate(LocalDate.of(1990, 1, 1))

@@ -37,6 +37,9 @@ public class Member {
     @Column(nullable = false, length = 50)
     private String name;
 
+    @Column(nullable = false, length = 13)
+    private String phone;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Gender gender;
@@ -49,11 +52,11 @@ public class Member {
     private Role role;
 
     @CreationTimestamp
-    @Column(name = "created_at", updatable = false, insertable = false)
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
     @UpdateTimestamp
-    @Column(name = "updated_at", insertable = false)
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "guardian", cascade = CascadeType.ALL, orphanRemoval = true)

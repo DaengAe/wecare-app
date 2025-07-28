@@ -1,11 +1,11 @@
 spring:
   jpa:
     hibernate:
-      ddl-auto: none #JPA를 통한 DDL 자동 생성 비활성화
+      ddl-auto: 'create-drop'
   datasource:
-    url: jdbc:mysql://localhost:3306/wecare_test
-    username: wecare_test
-    password: wecareTest
+    url: jdbc:mysql://localhost:3306/wecare_db
+    username: root
+    password: dsa991006!
     driver-class-name: com.mysql.cj.jdbc.Driver
   data:
     redis:

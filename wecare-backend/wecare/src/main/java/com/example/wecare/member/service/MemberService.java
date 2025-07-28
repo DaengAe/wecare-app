@@ -21,21 +21,25 @@ public class MemberService {
 
     private final MemberRepository memberRepository;
 
+    // 현재 로그인한 사용자의 ID(고유 식별자)를 가져오기
     private Long getCurrentMemberId() {
         return Long.parseLong(SecurityContextHolder.getContext().getAuthentication().getName());
     }
 
+    // 현재 로그인한 사용자의 전체 정보(Member 엔티티 객체)를 데이터베이스에서 조회
     private Member getCurrentMember() {
         Long currentMemberId = getCurrentMemberId();
         return memberRepository.findById(currentMemberId)
                 .orElseThrow(() -> new IllegalArgumentException("현재 로그인된 사용자를 찾을 수 없습니다."));
     }
 
+    // 현재 로그인한 사용자 본인의 정보를 조회
     public MemberResponse getMe() {
         Member currentMember = getCurrentMember();
         return convertToResponse(currentMember);
     }
 
+    // 현재 로그인한 보호자(Guardian)에게 연결된 모든 피보호자(Dependent)들의 목록을 조회
     public List<MemberResponse> getMyDependents() {
         Member currentMember = getCurrentMember();
         if (currentMember.getRole() != Role.GUARDIAN) {
@@ -49,6 +53,7 @@ public class MemberService {
                 .collect(Collectors.toList());
     }
 
+    // 엔티티(Entity) → DTO(Data Transfer Object)
     private MemberResponse convertToResponse(Member member) {
         Long guardianId = null;
         if (member.getRole() == Role.DEPENDENT && !member.getGuardianConnections().isEmpty()) {

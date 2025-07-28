@@ -1,9 +1,12 @@
 spring:
+  jpa:
+    hibernate:
+      ddl-auto: update
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/wecare_test?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-    username: wecare_test
-    password: wecareTest
+    url: jdbc:mysql://localhost:3306/wecare_db?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: root
+    password: dsa991006!
   data:
     redis:
       host: localhost
