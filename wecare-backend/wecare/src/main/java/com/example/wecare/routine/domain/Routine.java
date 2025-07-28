@@ -77,4 +77,10 @@ public class Routine {
 
     @Column(nullable = false)
     private boolean completed;
+
+    @Column(name = "guardian_memo", columnDefinition = "TEXT")
+    private String guardianMemo; // 보호자 메모
+
+    @Column(name = "dependent_memo", columnDefinition = "TEXT")
+    private String dependentMemo; // 피보호자 메모
 }

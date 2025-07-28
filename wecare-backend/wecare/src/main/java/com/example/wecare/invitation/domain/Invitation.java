@@ -35,4 +35,8 @@ public class Invitation {
     @Column(name = "is_active", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 1")
     private boolean isActive = true;
 
+    @Enumerated(EnumType.STRING) // Enum 값을 문자열로 저장
+    @Column(name = "relationship_type", nullable = false) // 관계 필드 추가
+    private RelationshipType relationshipType;
+
 }

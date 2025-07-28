@@ -40,11 +40,10 @@ public class AuthService {
         Member member = new Member();
         member.setPassword(passwordEncoder.encode(request.getPassword()));
         member.setName(request.getName());
-        member.setPhone(request.getPhone());
         member.setGender(request.getGender());
         member.setBirthDate(request.getBirthDate());
-        member.setUsername(request.getUsername());
         member.setRole(request.getRole());
+        member.setUsername(request.getUsername());
 
         memberRepository.save(member);
     }

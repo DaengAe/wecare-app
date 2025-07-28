@@ -6,17 +6,18 @@ import com.example.wecare.member.domain.Role;
 import com.example.wecare.member.dto.MemberResponse;
 import com.example.wecare.member.repository.MemberRepository;
 import com.example.wecare.member.service.MemberService;
+import com.example.wecare.common.util.SecurityUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
+
+import jakarta.persistence.EntityManager;
 
 import java.time.LocalDate;
 import java.util.HashSet;
@@ -27,6 +28,9 @@ import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,8 +42,11 @@ class MemberServiceTest {
     @Mock
     private MemberRepository memberRepository;
 
+    // SecurityUtil은 static 메소드를 가지고 있으므로 Mockito.mockStatic으로 처리
+    // @Mock private SecurityUtil securityUtil; // 더 이상 필요 없음
+
     @Mock
-    private SecurityContext securityContext;
+    private EntityManager entityManager;
 
     private Member guardian1;
     private Member guardian2;
@@ -48,8 +55,6 @@ class MemberServiceTest {
 
     @BeforeEach
     void setUp() {
-        SecurityContextHolder.setContext(securityContext);
-
         guardian1 = Member.builder().id(1L).username("guardian1").name("보호자1").role(Role.GUARDIAN).birthDate(LocalDate.of(1980, 1, 1)).build();
         guardian2 = Member.builder().id(2L).username("guardian2").name("보호자2").role(Role.GUARDIAN).birthDate(LocalDate.of(1985, 5, 5)).build();
         dependent1 = Member.builder().id(3L).username("dependent1").name("피보호자1").role(Role.DEPENDENT).birthDate(LocalDate.of(2000, 10, 10)).build();
@@ -60,6 +65,7 @@ class MemberServiceTest {
         Invitation conn1 = new Invitation();
         conn1.setGuardian(guardian1);
         conn1.setDependent(dependent1);
+        conn1.setActive(true); // 활성 상태 설정
         Set<Invitation> g1_dep_conns = new HashSet<>();
         g1_dep_conns.add(conn1);
         guardian1.setDependentConnections(g1_dep_conns);
@@ -71,6 +77,7 @@ class MemberServiceTest {
         Invitation conn2 = new Invitation();
         conn2.setGuardian(guardian1);
         conn2.setDependent(dependent2);
+        conn2.setActive(true); // 활성 상태 설정
         g1_dep_conns.add(conn2);
         guardian1.setDependentConnections(g1_dep_conns);
         Set<Invitation> d2_gua_conns = new HashSet<>();
@@ -81,15 +88,21 @@ class MemberServiceTest {
         Invitation conn3 = new Invitation();
         conn3.setGuardian(guardian2);
         conn3.setDependent(dependent1);
+        conn3.setActive(true); // 활성 상태 설정
         Set<Invitation> g2_dep_conns = new HashSet<>();
         g2_dep_conns.add(conn3);
         guardian2.setDependentConnections(g2_dep_conns);
         d1_gua_conns.add(conn3);
         dependent1.setGuardianConnections(d1_gua_conns);
+
+        // EntityManager.refresh() 호출 Mocking
+        doNothing().when(entityManager).refresh(any());
     }
 
     private void mockCurrentUser(Member member) {
-        when(securityContext.getAuthentication()).thenReturn(new UsernamePasswordAuthenticationToken(member.getId().toString(), null));
+        // SecurityUtil.getCurrentMemberId()는 static 메소드이므로 mockStatic으로 처리
+        // 이 메소드는 테스트 메소드 내에서 try-with-resources로 감싸져야 합니다.
+        // when(securityUtil.getCurrentMemberId()).thenReturn(member.getId()); // 더 이상 필요 없음
         when(memberRepository.findById(member.getId())).thenReturn(Optional.of(member));
     }
 
@@ -97,74 +110,94 @@ class MemberServiceTest {
     @DisplayName("성공: 현재 로그인된 사용자 정보 조회")
     void getMe_Success() {
         // given
-        mockCurrentUser(guardian1);
+        try (MockedStatic<SecurityUtil> mockedSecurityUtil = mockStatic(SecurityUtil.class)) {
+            mockedSecurityUtil.when(SecurityUtil::getCurrentMemberId).thenReturn(guardian1.getId());
+            mockCurrentUser(guardian1);
 
-        // when
-        MemberResponse response = memberService.getMe();
+            // when
+            MemberResponse response = memberService.getMe();
 
-        // then
-        assertThat(response).isNotNull();
-        assertThat(response.getId()).isEqualTo(guardian1.getId());
-        assertThat(response.getUsername()).isEqualTo(guardian1.getUsername());
-        assertThat(response.getName()).isEqualTo(guardian1.getName());
+            // then
+            assertThat(response).isNotNull();
+            assertThat(response.getId()).isEqualTo(guardian1.getId());
+            assertThat(response.getUsername()).isEqualTo(guardian1.getUsername());
+            assertThat(response.getName()).isEqualTo(guardian1.getName());
+        }
     }
 
     @Test
     @DisplayName("성공: 보호자가 자신의 피보호자 목록 조회")
-    void getMyDependents_Success_Guardian() {
+    void getDependents_Success_Guardian() {
         // given
-        mockCurrentUser(guardian1);
+        try (MockedStatic<SecurityUtil> mockedSecurityUtil = mockStatic(SecurityUtil.class)) {
+            mockedSecurityUtil.when(SecurityUtil::getCurrentMemberId).thenReturn(guardian1.getId());
+            mockCurrentUser(guardian1);
 
-        // when
-        List<MemberResponse> dependents = memberService.getMyDependents();
+            // when
+            MemberResponse response = memberService.getMe();
 
-        // then
-        assertThat(dependents).hasSize(2);
-        assertThat(dependents.stream().map(MemberResponse::getId).collect(Collectors.toList()))
-                .containsExactlyInAnyOrder(dependent1.getId(), dependent2.getId());
+            // then
+            assertThat(response).isNotNull();
+            assertThat(response.getRole()).isEqualTo(Role.GUARDIAN);
+            assertThat(response.getDependents()).hasSize(2);
+            assertThat(response.getDependents().stream().map(MemberResponse::getId).collect(Collectors.toList()))
+                    .containsExactlyInAnyOrder(dependent1.getId(), dependent2.getId());
+        }
     }
 
     @Test
     @DisplayName("실패: 피보호자가 피보호자 목록 조회 시도")
-    void getMyDependents_Fail_DependentTries() {
+    void getDependents_Fail_DependentTries() {
         // given
-        mockCurrentUser(dependent1);
+        try (MockedStatic<SecurityUtil> mockedSecurityUtil = mockStatic(SecurityUtil.class)) {
+            mockedSecurityUtil.when(SecurityUtil::getCurrentMemberId).thenReturn(dependent1.getId());
+            mockCurrentUser(dependent1);
 
-        // when & then
-        assertThatThrownBy(() -> memberService.getMyDependents())
-                .isInstanceOf(AccessDeniedException.class)
-                .hasMessage("보호자만 피보호자 목록을 조회할 수 있습니다.");
+            // when
+            MemberResponse response = memberService.getMe();
+
+            // then
+            assertThat(response).isNotNull();
+            assertThat(response.getRole()).isEqualTo(Role.DEPENDENT);
+            assertThat(response.getDependents()).isNull(); // 피보호자는 dependents 필드가 null이어야 함
+        }
     }
 
     @Test
-    @DisplayName("성공: 피보호자 정보 조회 시 첫 번째 보호자 ID 포함")
-    void convertToResponse_DependentWithGuardianId() {
+    @DisplayName("성공: 피보호자 정보 조회 시 보호자 목록 포함")
+    void getMe_DependentWithGuardians() {
         // given
-        mockCurrentUser(dependent1);
+        try (MockedStatic<SecurityUtil> mockedSecurityUtil = mockStatic(SecurityUtil.class)) {
+            mockedSecurityUtil.when(SecurityUtil::getCurrentMemberId).thenReturn(dependent1.getId());
+            mockCurrentUser(dependent1);
 
-        // when
-        MemberResponse response = memberService.getMe(); // getMe를 통해 convertToResponse 호출
+            // when
+            MemberResponse response = memberService.getMe();
 
-        // then
-        assertThat(response).isNotNull();
-        assertThat(response.getId()).isEqualTo(dependent1.getId());
-        // dependent1은 guardian1과 guardian2 모두와 연결되어 있으므로, 첫 번째 보호자의 ID가 반환되는지 확인
-        // HashSet의 순서는 보장되지 않으므로, 두 보호자 중 하나가 반환되는지 확인
-        assertThat(response.getGuardianId()).isIn(guardian1.getId(), guardian2.getId());
+            // then
+            assertThat(response).isNotNull();
+            assertThat(response.getId()).isEqualTo(dependent1.getId());
+            assertThat(response.getGuardians()).hasSize(2);
+            assertThat(response.getGuardians().stream().map(g -> g.getId()).collect(Collectors.toList()))
+                    .containsExactlyInAnyOrder(guardian1.getId(), guardian2.getId());
+        }
     }
 
     @Test
-    @DisplayName("성공: 보호자 정보 조회 시 guardianId는 null")
-    void convertToResponse_GuardianWithoutGuardianId() {
+    @DisplayName("성공: 보호자 정보 조회 시 보호자 목록은 null")
+    void getMe_GuardianWithoutGuardians() {
         // given
-        mockCurrentUser(guardian1);
+        try (MockedStatic<SecurityUtil> mockedSecurityUtil = mockStatic(SecurityUtil.class)) {
+            mockedSecurityUtil.when(SecurityUtil::getCurrentMemberId).thenReturn(guardian1.getId());
+            mockCurrentUser(guardian1);
 
-        // when
-        MemberResponse response = memberService.getMe();
+            // when
+            MemberResponse response = memberService.getMe();
 
-        // then
-        assertThat(response).isNotNull();
-        assertThat(response.getId()).isEqualTo(guardian1.getId());
-        assertThat(response.getGuardianId()).isNull();
+            // then
+            assertThat(response).isNotNull();
+            assertThat(response.getId()).isEqualTo(guardian1.getId());
+            assertThat(response.getGuardians()).isNull(); // 보호자는 guardians 필드가 null이어야 함
+        }
     }
 }
