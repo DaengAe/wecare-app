@@ -10,6 +10,8 @@ import com.example.wecare.routine.domain.Routine;
 import com.example.wecare.routine.domain.RoutineAlarmSetting;
 import com.example.wecare.routine.domain.RoutineType;
 import com.example.wecare.routine.dto.RoutineRequest;
+import com.example.wecare.routine.dto.RoutineResponse;
+import com.example.wecare.routine.dto.RoutineMemoRequest;
 import com.example.wecare.routine.repository.RoutineAlarmSettingRepository;
 import com.example.wecare.routine.repository.RoutineRepository;
 import com.example.wecare.routine.service.RoutineService;
@@ -200,6 +202,8 @@ class RoutineServiceTest {
                 .startTime(LocalDateTime.now().minusHours(1))
                 .is_repeat(true)
                 .repeatDays(Arrays.asList(RepeatDay.MON))
+                .guardianMemo("기존 보호자 메모")
+                .dependentMemo("기존 피보호자 메모")
                 .build();
         RoutineAlarmSetting existingAlarmSetting = RoutineAlarmSetting.builder()
                 .id(100L)
@@ -237,6 +241,8 @@ class RoutineServiceTest {
         assertThat(updatedRoutine.getAlarmSetting().getAlertBeforeEndMin()).isEqualTo(15);
         assertThat(updatedRoutine.getAlarmSetting().getRepeatIntervalMin()).isEqualTo(60);
         assertThat(updatedRoutine.getRepeatDays()).containsExactlyInAnyOrder(RepeatDay.TUE, RepeatDay.THU);
+        assertThat(updatedRoutine.getGuardianMemo()).isEqualTo("기존 보호자 메모"); // 메모는 변경되지 않아야 함
+        assertThat(updatedRoutine.getDependentMemo()).isEqualTo("기존 피보호자 메모"); // 메모는 변경되지 않아야 함
         verify(routineAlarmSettingRepository, times(1)).save(any(RoutineAlarmSetting.class));
     }
 
@@ -253,6 +259,8 @@ class RoutineServiceTest {
                 .title("기존 루틴")
                 .startTime(LocalDateTime.now().minusHours(1))
                 .is_repeat(false)
+                .guardianMemo("기존 보호자 메모")
+                .dependentMemo("기존 피보호자 메모")
                 .build();
 
         when(routineRepository.findById(existingRoutine.getId())).thenReturn(Optional.of(existingRoutine));
@@ -277,6 +285,8 @@ class RoutineServiceTest {
 
         assertThat(updatedRoutine.getAlarmSetting()).isNotNull();
         assertThat(updatedRoutine.getAlarmSetting().getAlertBeforeStartMin()).isEqualTo(10);
+        assertThat(updatedRoutine.getGuardianMemo()).isEqualTo("기존 보호자 메모"); // 메모는 변경되지 않아야 함
+        assertThat(updatedRoutine.getDependentMemo()).isEqualTo("기존 피보호자 메모"); // 메모는 변경되지 않아야 함
         verify(routineAlarmSettingRepository, times(1)).save(any(RoutineAlarmSetting.class));
     }
 
@@ -293,6 +303,8 @@ class RoutineServiceTest {
                 .title("기존 루틴")
                 .startTime(LocalDateTime.now().minusHours(1))
                 .is_repeat(false)
+                .guardianMemo("기존 보호자 메모")
+                .dependentMemo("기존 피보호자 메모")
                 .build();
         RoutineAlarmSetting existingAlarmSetting = RoutineAlarmSetting.builder()
                 .id(100L)
@@ -320,8 +332,12 @@ class RoutineServiceTest {
         Routine updatedRoutine = routineCaptor.getValue();
 
         assertThat(updatedRoutine.getAlarmSetting()).isNull();
+        assertThat(updatedRoutine.getGuardianMemo()).isEqualTo("기존 보호자 메모"); // 메모는 변경되지 않아야 함
+        assertThat(updatedRoutine.getDependentMemo()).isEqualTo("기존 피보호자 메모"); // 메모는 변경되지 않아야 함
         verify(routineAlarmSettingRepository, times(1)).delete(existingAlarmSetting);
     }
+
+
 
     // --- 루틴 조회 테스트 ---
     @Test
@@ -434,6 +450,8 @@ class RoutineServiceTest {
                 .hasMessage("루틴을 삭제할 권한이 없습니다.");
     }
 
+
+
     // --- 루틴 완료 테스트 ---
     @Test
     @DisplayName("성공: 피보호자가 자신의 루틴을 완료 처리")
@@ -465,5 +483,129 @@ class RoutineServiceTest {
         assertThatThrownBy(() -> routineService.completeRoutine(routine.getId()))
                 .isInstanceOf(AccessDeniedException.class)
                 .hasMessage("루틴을 완료할 수 있는 권한이 없습니다. 피보호자만 가능합니다.");
+    }
+
+    // --- 메모 업데이트 테스트 ---
+    @Test
+    @DisplayName("성공: 보호자가 자신의 루틴의 보호자 메모를 수정")
+    void updateRoutineMemo_Success_GuardianUpdatesGuardianMemo() {
+        // given
+        mockCurrentUser(guardian);
+        Routine existingRoutine = Routine.builder()
+                .id(1L)
+                .guardian(guardian)
+                .dependent(dependent)
+                .guardianMemo("기존 보호자 메모")
+                .dependentMemo("기존 피보호자 메모")
+                .build();
+        when(routineRepository.findById(existingRoutine.getId())).thenReturn(Optional.of(existingRoutine));
+        when(routineRepository.save(any(Routine.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RoutineMemoRequest request = new RoutineMemoRequest();
+        request.setGuardianMemo("새로운 보호자 메모");
+
+        // when
+        routineService.updateRoutineMemo(existingRoutine.getId(), request);
+
+        // then
+        ArgumentCaptor<Routine> routineCaptor = ArgumentCaptor.forClass(Routine.class);
+        verify(routineRepository, times(1)).save(routineCaptor.capture());
+        Routine updatedRoutine = routineCaptor.getValue();
+
+        assertThat(updatedRoutine.getGuardianMemo()).isEqualTo("새로운 보호자 메모");
+        assertThat(updatedRoutine.getDependentMemo()).isEqualTo("기존 피보호자 메모"); // 피보호자 메모는 변경되지 않아야 함
+    }
+
+    @Test
+    @DisplayName("성공: 피보호자가 자신의 루틴의 피보호자 메모를 수정")
+    void updateRoutineMemo_Success_DependentUpdatesDependentMemo() {
+        // given
+        mockCurrentUser(dependent);
+        Routine existingRoutine = Routine.builder()
+                .id(1L)
+                .guardian(guardian)
+                .dependent(dependent)
+                .guardianMemo("기존 보호자 메모")
+                .dependentMemo("기존 피보호자 메모")
+                .build();
+        when(routineRepository.findById(existingRoutine.getId())).thenReturn(Optional.of(existingRoutine));
+        when(routineRepository.save(any(Routine.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RoutineMemoRequest request = new RoutineMemoRequest();
+        request.setDependentMemo("새로운 피보호자 메모");
+
+        // when
+        routineService.updateRoutineMemo(existingRoutine.getId(), request);
+
+        // then
+        ArgumentCaptor<Routine> routineCaptor = ArgumentCaptor.forClass(Routine.class);
+        verify(routineRepository, times(1)).save(routineCaptor.capture());
+        Routine updatedRoutine = routineCaptor.getValue();
+
+        assertThat(updatedRoutine.getGuardianMemo()).isEqualTo("기존 보호자 메모"); // 보호자 메모는 변경되지 않아야 함
+        assertThat(updatedRoutine.getDependentMemo()).isEqualTo("새로운 피보호자 메모");
+    }
+
+    @Test
+    @DisplayName("실패: 보호자가 피보호자 메모를 수정 시도")
+    void updateRoutineMemo_Fail_GuardianTriesToUpdateDependentMemo() {
+        // given
+        mockCurrentUser(guardian);
+        Routine existingRoutine = Routine.builder()
+                .id(1L)
+                .guardian(guardian)
+                .dependent(dependent)
+                .build();
+        when(routineRepository.findById(existingRoutine.getId())).thenReturn(Optional.of(existingRoutine));
+
+        RoutineMemoRequest request = new RoutineMemoRequest();
+        request.setDependentMemo("보호자가 수정하려는 피보호자 메모");
+
+        // when & then
+        assertThatThrownBy(() -> routineService.updateRoutineMemo(existingRoutine.getId(), request))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessage("보호자는 피보호자 메모를 수정할 수 없습니다.");
+    }
+
+    @Test
+    @DisplayName("실패: 피보호자가 보호자 메모를 수정 시도")
+    void updateRoutineMemo_Fail_DependentTriesToUpdateGuardianMemo() {
+        // given
+        mockCurrentUser(dependent);
+        Routine existingRoutine = Routine.builder()
+                .id(1L)
+                .guardian(guardian)
+                .dependent(dependent)
+                .build();
+        when(routineRepository.findById(existingRoutine.getId())).thenReturn(Optional.of(existingRoutine));
+
+        RoutineMemoRequest request = new RoutineMemoRequest();
+        request.setGuardianMemo("피보호자가 수정하려는 보호자 메모");
+
+        // when & then
+        assertThatThrownBy(() -> routineService.updateRoutineMemo(existingRoutine.getId(), request))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessage("피보호자는 보호자 메모를 수정할 수 없습니다.");
+    }
+
+    @Test
+    @DisplayName("실패: 제3자가 메모 수정 시도")
+    void updateRoutineMemo_Fail_OtherMemberTriesToUpdateMemo() {
+        // given
+        mockCurrentUser(otherMember);
+        Routine existingRoutine = Routine.builder()
+                .id(1L)
+                .guardian(guardian)
+                .dependent(dependent)
+                .build();
+        when(routineRepository.findById(existingRoutine.getId())).thenReturn(Optional.of(existingRoutine));
+
+        RoutineMemoRequest request = new RoutineMemoRequest();
+        request.setGuardianMemo("제3자가 수정하려는 메모");
+
+        // when & then
+        assertThatThrownBy(() -> routineService.updateRoutineMemo(existingRoutine.getId(), request))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessage("해당 루틴에 접근할 권한이 없습니다.");
     }
 }

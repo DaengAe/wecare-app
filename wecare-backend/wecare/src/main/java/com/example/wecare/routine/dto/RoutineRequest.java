@@ -4,6 +4,7 @@ package com.example.wecare.routine.dto;
 import com.example.wecare.routine.domain.RepeatDay;
 import com.example.wecare.routine.domain.RoutineType;
 
+import com.example.wecare.routine.domain.SoundType;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -45,8 +46,9 @@ public class RoutineRequest {
     private Integer alertBeforeStartMin;
     private Integer alertBeforeEndMin;
     private Integer repeatIntervalMin;
-
-    
-
-    
+    private Boolean isEnabled; // 알림 활성화 여부 필드 추가
+    private SoundType soundType; // 알림 사운드 타입
+    private String voiceMessageUrl; // 음성 메시지 URL
+    private String guardianMemo; // 보호자 메모
+    private String dependentMemo; // 피보호자 메모
 }

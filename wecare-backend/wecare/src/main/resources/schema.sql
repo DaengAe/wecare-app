@@ -8,13 +8,12 @@
 CREATE TABLE IF NOT EXISTS members (
                                        id         BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
                                        birth_date DATE NOT NULL,
-                                       created_at DATETIME(6),
-    gender     ENUM('FEMALE', 'MALE') NOT NULL,
+                                       created_at TIMESTAMP,
+    gender     VARCHAR(255) NOT NULL,
     name       VARCHAR(50) NOT NULL,
     password   VARCHAR(100) NOT NULL,
-    phone      VARCHAR(13) NOT NULL,
-    role       ENUM('DEPENDENT', 'GUARDIAN') NOT NULL,
-    updated_at DATETIME(6),
+    role       VARCHAR(255) NOT NULL,
+    updated_at TIMESTAMP,
     username   VARCHAR(50) NOT NULL UNIQUE
     );
 
@@ -24,6 +23,7 @@ CREATE TABLE IF NOT EXISTS invitations (
                                            guardian_id  BIGINT NOT NULL,
                                            created_at   DATETIME(6),
     is_active    TINYINT(1) NOT NULL DEFAULT 1,
+    relationship_type ENUM('PARENT', 'GRANDPARENT', 'SIBLING', 'FRIEND', 'RELATIVE', 'OTHER') NOT NULL,
     PRIMARY KEY (dependent_id, guardian_id),
     FOREIGN KEY (dependent_id) REFERENCES members (id) ON DELETE CASCADE,
     FOREIGN KEY (guardian_id) REFERENCES members (id) ON DELETE CASCADE
@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS routine_alarm_setting (
                                                      alert_before_end_min   INT,
                                                      alert_before_start_min INT,
                                                      repeat_interval_min    INT,
+                                                     is_enabled             BOOLEAN NOT NULL DEFAULT TRUE, -- 알림 활성화 여부 필드 추가
                                                      routine_id             BIGINT UNIQUE,
                                                      FOREIGN KEY (routine_id) REFERENCES routine (id) ON DELETE CASCADE
     );

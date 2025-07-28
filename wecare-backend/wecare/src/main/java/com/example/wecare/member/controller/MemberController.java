@@ -17,15 +17,13 @@ public class MemberController {
 
     private final MemberService memberService;
 
+    // MyPage 접근 시
     @GetMapping("/me")
     public ResponseEntity<MemberResponse> getMe() {
         MemberResponse memberResponse = memberService.getMe();
         return ResponseEntity.ok(memberResponse);
     }
 
-    @GetMapping("/my-dependents")
-    public ResponseEntity<List<MemberResponse>> getMyDependents() {
-        List<MemberResponse> dependents = memberService.getMyDependents();
-        return ResponseEntity.ok(dependents);
-    }
+    // 연결된 피보호자 목록 조회
+    
 }

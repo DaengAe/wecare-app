@@ -8,6 +8,7 @@ import com.example.wecare.routine.domain.Routine;
 import com.example.wecare.routine.domain.RoutineAlarmSetting;
 import com.example.wecare.routine.dto.RoutineRequest;
 import com.example.wecare.routine.dto.RoutineResponse;
+import com.example.wecare.routine.dto.RoutineMemoRequest;
 import com.example.wecare.routine.repository.RoutineRepository;
 import com.example.wecare.routine.repository.RoutineAlarmSettingRepository;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.example.wecare.routine.domain.SoundType; // SoundType 임포트 추가
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -70,21 +73,31 @@ public class RoutineService {
                 .is_repeat(request.isRepeat())
                 .repeatDays(request.getRepeatDays())
                 .completed(false)
+                .guardianMemo(request.getGuardianMemo()) // 보호자 메모 추가
+                .dependentMemo(request.getDependentMemo()) // 피보호자 메모 추가
                 .build();
 
         Routine savedRoutine = routineRepository.save(routine);
 
-        if (request.getAlertBeforeStartMin() != null ||
-            request.getAlertBeforeEndMin() != null ||
-            request.getRepeatIntervalMin() != null) {
-            RoutineAlarmSetting alarmSetting = RoutineAlarmSetting.builder()
-                .routine(savedRoutine)
-                .alertBeforeStartMin(request.getAlertBeforeStartMin())
-                .alertBeforeEndMin(request.getAlertBeforeEndMin())
-                .repeatIntervalMin(request.getRepeatIntervalMin())
-                .build();
-            routineAlarmSettingRepository.save(alarmSetting);
-            savedRoutine.setAlarmSetting(alarmSetting);
+        // isEnabled가 true이거나 null인 경우에만 알림 설정을 생성
+        if (Boolean.TRUE.equals(request.getIsEnabled()) || request.getIsEnabled() == null) {
+            if (request.getAlertBeforeStartMin() != null ||
+                request.getAlertBeforeEndMin() != null ||
+                request.getRepeatIntervalMin() != null ||
+                request.getSoundType() != null || // SoundType 추가
+                request.getVoiceMessageUrl() != null) { // VoiceMessageUrl 추가
+                RoutineAlarmSetting alarmSetting = RoutineAlarmSetting.builder()
+                    .routine(savedRoutine)
+                    .alertBeforeStartMin(request.getAlertBeforeStartMin())
+                    .alertBeforeEndMin(request.getAlertBeforeEndMin())
+                    .repeatIntervalMin(request.getRepeatIntervalMin())
+                    .isEnabled(true) // 기본값 true
+                    .soundType(request.getSoundType()) // SoundType 추가
+                    .voiceMessageUrl(request.getVoiceMessageUrl()) // VoiceMessageUrl 추가
+                    .build();
+                routineAlarmSettingRepository.save(alarmSetting);
+                savedRoutine.setAlarmSetting(alarmSetting);
+            }
         }
 
         return convertToResponse(savedRoutine);
@@ -93,7 +106,7 @@ public class RoutineService {
     public List<RoutineResponse> getRoutinesByGuardian() {
         Member currentMember = getCurrentMember();
         if (currentMember.getRole() != Role.GUARDIAN) {
-            throw new AccessDeniedException("보호자만 루틴 목록을 조회할 수 있습니다.");
+            throw new AccessDeniedException("루틴을 생성할 수 있는 권한이 없습니다. 보호자만 루틴을 생성할 수 있습니다.");
         }
         List<Routine> routines = routineRepository.findByGuardianId(currentMember.getId());
         return routines.stream()
@@ -122,8 +135,8 @@ public class RoutineService {
         Routine routine = findRoutineByIdAndCheckAccess(routineId);
         Member currentMember = getCurrentMember();
 
-        if (!routine.getGuardian().getId().equals(currentMember.getId())) {
-            throw new AccessDeniedException("루틴을 수정할 권한이 없습니다.");
+        if (currentMember.getRole() != Role.GUARDIAN || !routine.getGuardian().getId().equals(currentMember.getId())) {
+            throw new AccessDeniedException("루틴을 수정할 권한이 없습니다. 보호자만 루틴을 수정할 수 있습니다.");
         }
 
         routine.setType(request.getType());
@@ -137,30 +150,49 @@ public class RoutineService {
         }
 
         RoutineAlarmSetting existingAlarmSetting = routine.getAlarmSetting();
-        boolean hasAlarmRequest = request.getAlertBeforeStartMin() != null ||
-                                  request.getAlertBeforeEndMin() != null ||
-                                  request.getRepeatIntervalMin() != null;
+        boolean hasAlarmSettingRequest = request.getAlertBeforeStartMin() != null ||
+                                         request.getAlertBeforeEndMin() != null ||
+                                         request.getRepeatIntervalMin() != null ||
+                                         request.getSoundType() != null || // SoundType 추가
+                                         request.getVoiceMessageUrl() != null; // VoiceMessageUrl 추가
 
-        if (hasAlarmRequest) {
-            if (existingAlarmSetting == null) {
-                RoutineAlarmSetting newAlarmSetting = RoutineAlarmSetting.builder()
-                    .routine(routine)
-                    .alertBeforeStartMin(request.getAlertBeforeStartMin())
-                    .alertBeforeEndMin(request.getAlertBeforeEndMin())
-                    .repeatIntervalMin(request.getRepeatIntervalMin())
-                    .build();
-                routine.setAlarmSetting(newAlarmSetting);
-                routineAlarmSettingRepository.save(newAlarmSetting);
-            } else {
+        // 1. 알림 설정을 새로 생성해야 하는 경우
+        if (existingAlarmSetting == null && (Boolean.TRUE.equals(request.getIsEnabled()) || (request.getIsEnabled() == null && hasAlarmSettingRequest))) {
+            RoutineAlarmSetting newAlarmSetting = RoutineAlarmSetting.builder()
+                .routine(routine)
+                .alertBeforeStartMin(request.getAlertBeforeStartMin())
+                .alertBeforeEndMin(request.getAlertBeforeEndMin())
+                .repeatIntervalMin(request.getRepeatIntervalMin())
+                .isEnabled(Boolean.TRUE.equals(request.getIsEnabled()) || request.getIsEnabled() == null) // 요청에 isEnabled가 없으면 true로 간주
+                .soundType(request.getSoundType()) // SoundType 추가
+                .voiceMessageUrl(request.getVoiceMessageUrl()) // VoiceMessageUrl 추가
+                .build();
+            routine.setAlarmSetting(newAlarmSetting);
+            routineAlarmSettingRepository.save(newAlarmSetting);
+        }
+        // 2. 기존 알림 설정을 업데이트해야 하는 경우
+        else if (existingAlarmSetting != null) {
+            // isEnabled가 명시적으로 요청에 포함된 경우
+            if (request.getIsEnabled() != null) {
+                existingAlarmSetting.setIsEnabled(request.getIsEnabled());
+            }
+            // 알림 설정 필드들이 요청에 포함된 경우 업데이트
+            if (hasAlarmSettingRequest) {
                 existingAlarmSetting.setAlertBeforeStartMin(request.getAlertBeforeStartMin());
                 existingAlarmSetting.setAlertBeforeEndMin(request.getAlertBeforeEndMin());
                 existingAlarmSetting.setRepeatIntervalMin(request.getRepeatIntervalMin());
+                existingAlarmSetting.setSoundType(request.getSoundType()); // SoundType 추가
+                existingAlarmSetting.setVoiceMessageUrl(request.getVoiceMessageUrl()); // VoiceMessageUrl 추가
+            }
+            // 알림 관련 필드 요청이 없고, isEnabled가 false로 명시적으로 넘어오거나, isEnabled가 null이면서 알림 관련 필드도 없는 경우 삭제
+            if (!hasAlarmSettingRequest && (Boolean.FALSE.equals(request.getIsEnabled()) || request.getIsEnabled() == null)) {
+                routine.setAlarmSetting(null);
+                routineAlarmSettingRepository.delete(existingAlarmSetting);
+            } else {
                 routineAlarmSettingRepository.save(existingAlarmSetting);
             }
-        } else if (existingAlarmSetting != null) {
-            routine.setAlarmSetting(null);
-            routineAlarmSettingRepository.delete(existingAlarmSetting);
         }
+
 
         Routine updatedRoutine = routineRepository.save(routine);
         return convertToResponse(updatedRoutine);
@@ -192,6 +224,35 @@ public class RoutineService {
 
         routine.setCompleted(true);
         routineRepository.save(routine);
+    }
+
+    @Transactional
+    public RoutineResponse updateRoutineMemo(Long routineId, RoutineMemoRequest request) {
+        Routine routine = findRoutineByIdAndCheckAccess(routineId);
+        Member currentMember = getCurrentMember();
+
+        if (currentMember.getRole() == Role.GUARDIAN) {
+            if (!routine.getGuardian().getId().equals(currentMember.getId())) {
+                throw new AccessDeniedException("해당 루틴의 보호자 메모를 수정할 권한이 없습니다.");
+            }
+            if (request.getDependentMemo() != null) {
+                throw new AccessDeniedException("보호자는 피보호자 메모를 수정할 수 없습니다.");
+            }
+            routine.setGuardianMemo(request.getGuardianMemo());
+        } else if (currentMember.getRole() == Role.DEPENDENT) {
+            if (!routine.getDependent().getId().equals(currentMember.getId())) {
+                throw new AccessDeniedException("해당 루틴의 피보호자 메모를 수정할 권한이 없습니다.");
+            }
+            if (request.getGuardianMemo() != null) {
+                throw new AccessDeniedException("피보호자는 보호자 메모를 수정할 수 없습니다.");
+            }
+            routine.setDependentMemo(request.getDependentMemo());
+        } else {
+            throw new AccessDeniedException("메모를 수정할 권한이 없습니다.");
+        }
+
+        Routine updatedRoutine = routineRepository.save(routine);
+        return convertToResponse(updatedRoutine);
     }
 
     private Routine findRoutineByIdAndCheckAccess(Long routineId) {
@@ -228,7 +289,15 @@ public class RoutineService {
                 .alertBeforeStartMin(routine.getAlarmSetting() != null ? routine.getAlarmSetting().getAlertBeforeStartMin() : null)
                 .alertBeforeEndMin(routine.getAlarmSetting() != null ? routine.getAlarmSetting().getAlertBeforeEndMin() : null)
                 .repeatIntervalMin(routine.getAlarmSetting() != null ? routine.getAlarmSetting().getRepeatIntervalMin() : null)
+                .isEnabled(routine.getAlarmSetting() != null ? routine.getAlarmSetting().getIsEnabled() : false) // isEnabled 추가
+                .soundType(routine.getAlarmSetting() != null ? routine.getAlarmSetting().getSoundType() : null) // SoundType 추가
+                .voiceMessageUrl(routine.getAlarmSetting() != null ? routine.getAlarmSetting().getVoiceMessageUrl() : null) // VoiceMessageUrl 추가
                 .completed(routine.isCompleted())
+                .guardianMemo(routine.getGuardianMemo()) // 보호자 메모 추가
+                .dependentMemo(routine.getDependentMemo()) // 피보호자 메모 추가
+                .guardianName(routine.getGuardian().getName()) // 보호자 이름 추가
+                .dependentName(routine.getDependent().getName()) // 피보호자 이름 추가
                 .build();
     }
 }
+

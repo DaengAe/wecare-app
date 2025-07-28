@@ -30,4 +30,15 @@ public class RoutineAlarmSetting {
     private Integer alertBeforeStartMin;
     private Integer alertBeforeEndMin;
     private Integer repeatIntervalMin;
+
+    @Builder.Default
+    @Column(name = "is_enabled", nullable = false)
+    private Boolean isEnabled = true;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sound_type")
+    private SoundType soundType; // 알림 사운드 타입
+
+    @Column(name = "voice_message_url")
+    private String voiceMessageUrl; // 음성 메시지 URL (VOICE_MESSAGE 타입일 경우)
 }
