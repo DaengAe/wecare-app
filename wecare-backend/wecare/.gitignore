@@ -315,6 +315,7 @@ dist
 .AppleDouble
 .LSOverride
 
+
 # Icon must end with two \r
 Icon
 
@@ -452,3 +453,4 @@ gradle-app.setting
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/react,reactnative,java,intellij,redis,git,visualstudiocode
+gradle.properties
