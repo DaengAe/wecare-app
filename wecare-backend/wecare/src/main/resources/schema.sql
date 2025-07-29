@@ -55,6 +55,8 @@ CREATE TABLE IF NOT EXISTS routine_alarm_setting (
                                                      repeat_interval_min    INT,
                                                      is_enabled             BOOLEAN NOT NULL DEFAULT TRUE, -- 알림 활성화 여부 필드 추가
                                                      routine_id             BIGINT UNIQUE,
+                                                     sound_type             ENUM ('DEFAULT_SOUND','SILENT','VIBRATION','VOICE_MESSAGE') DEFAULT NULL,
+                                                     voice_message_url      VARCHAR(255) DEFAULT NULL,
                                                      FOREIGN KEY (routine_id) REFERENCES routine (id) ON DELETE CASCADE
     );
 
